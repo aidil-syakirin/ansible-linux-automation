@@ -1,0 +1,40 @@
+---
+- name: Routine patching activity
+  hosts: host_servers
+  gather_facts: true
+
+  tasks:
+    
+    - name: Show hostname
+      ansible.builtin.debug:
+        var: ansible_facts["hostname"]
+  
+    - name: Update package cache to their latest version
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Upgrade installed packages
+      become: true
+      ansible.builtin.apt:
+        upgrade: yes
+
+    - name: Ensure required packages are installed
+      become: true
+      ansible.builtin.apt:
+        name:
+        - curl
+        - git
+        state: present
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Show reboot status
+      ansible.builtin.debug:
+        msg: "Reboot required: {{ reboot_required.stat.exists }}"
+    
+
+

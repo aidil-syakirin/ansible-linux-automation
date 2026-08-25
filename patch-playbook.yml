@@ -1,0 +1,58 @@
+---
+- name: Routine patching activity
+  hosts: app_servers
+  gather_facts: true
+
+  tasks:
+    
+    - name: Show hostname
+      ansible.builtin.debug:
+        var: ansible_facts["hostname"]
+
+    - name: Check Docker service status
+      ansible.builtin.service_facts:
+
+    - name: Show Docker service state
+      ansible.builtin.debug:
+        msg: "Docker state: {{ ansible_facts.services['docker.service'].state }}"
+  
+    - name: Update package cache to their latest version
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Upgrade installed packages
+      become: true
+      ansible.builtin.apt:
+        upgrade: yes
+
+    - name: Ensure required packages are installed
+      become: true
+      ansible.builtin.apt:
+        name:
+        - curl
+        - git
+        state: present
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Show reboot status
+      ansible.builtin.debug:
+        msg: "Reboot required: {{ reboot_required.stat.exists }}"
+
+    - name: Reboot if required
+      become: true
+      ansible.builtin.reboot:
+        msg: "Reboot iniated by ansible"
+      when: reboot_required.stat.exists
+    
+    - name: Check Docker service status
+      ansible.builtin.service_facts:
+
+    - name: Show Docker service state
+      ansible.builtin.debug:
+        msg: "Docker state: {{ ansible_facts.services['docker.service'].state }}"
+
