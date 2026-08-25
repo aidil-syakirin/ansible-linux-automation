@@ -3,3 +3,4 @@
 .vault_pass
 vault-password*
 .env
+inventory.local.ini
