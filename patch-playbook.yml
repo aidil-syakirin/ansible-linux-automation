@@ -15,8 +15,18 @@
 
     - name: Show filesystem information
       ansible.builtin.debug:
-        msg: " Disk space utilization:  {{ (ansible_facts['mounts'][0]['size_available'] / ansible_facts['mounts'][0]['size_total']               ) | round(2) * 100 }}% "
+        msg: >-
+          {{ (((ansible_facts['mounts'][0]['size_total']
+          - ansible_facts['mounts'][0]['size_available'])
+          / ansible_facts['mounts'][0]['size_total']) * 100) | round(2) }}
       register: filesystem_space_util 
+
+    - name: Validate disk space before patching
+      ansible.builtin.assert:
+        that:
+          - filesystem_space_util.msg | float < 90
+        success_msg: "Disk utilization is acceptable. Proceeding with patching."
+        fail_msg: "Disk utilization is too high. Patching cannot proceed."
 
     - name: Show memory information
       ansible.builtin.debug:
