@@ -13,12 +13,17 @@
       ansible.builtin.debug:
         msg: "Uptime: {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
 
+    - name: Find root filesystem
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+      register: root_filesystem
+
     - name: Show filesystem information
       ansible.builtin.debug:
         msg: >-
-          {{ (((ansible_facts['mounts'][0]['size_total']
-          - ansible_facts['mounts'][0]['size_available'])
-          / ansible_facts['mounts'][0]['size_total']) * 100) | round(2) }}
+          {{ (((root_filesystem.msg.size_total
+          - root_filesystem.msg.size_available)
+          / root_filesystem.msg.size_total) * 100) | round(2) }}
       register: filesystem_space_util 
 
     - name: Validate disk space before patching
@@ -33,6 +38,12 @@
         msg:
         - "Total memory: {{ ansible_facts['memtotal_mb'] }} MB"
         - "Free memory: {{ ansible_facts['memfree_mb'] }} MB"
+
+    - name: Validate available memory
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['memfree_mb'] > 300
+        fail_msg: "Available memory is below 300 MB."
 
     - name: Show current kernel
       ansible.builtin.debug:
