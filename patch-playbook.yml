@@ -7,8 +7,27 @@
     
     - name: Show hostname
       ansible.builtin.debug:
-        var: ansible_facts["hostname"]
+        msg: "hostname: {{ ansible_facts['hostname'] }}"
 
+    - name: Show system uptime
+      ansible.builtin.debug:
+        msg: "Uptime: {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
+
+    - name: Show filesystem information
+      ansible.builtin.debug:
+        msg: " Disk space utilization:  {{ (ansible_facts['mounts'][0]['size_available'] / ansible_facts['mounts'][0]['size_total']               ) | round(2) * 100 }}% "
+      register: filesystem_space_util 
+
+    - name: Show memory information
+      ansible.builtin.debug:
+        msg:
+        - "Total memory: {{ ansible_facts['memtotal_mb'] }} MB"
+        - "Free memory: {{ ansible_facts['memfree_mb'] }} MB"
+
+    - name: Show current kernel
+      ansible.builtin.debug:
+        msg: "Kernel: {{ ansible_facts['kernel'] }}"
+      
     - name: Check Docker service status
       ansible.builtin.service_facts:
 
