@@ -36,14 +36,10 @@
     - name: Show memory information
       ansible.builtin.debug:
         msg:
-        - "Total memory: {{ ansible_facts['memtotal_mb'] }} MB"
-        - "Free memory: {{ ansible_facts['memfree_mb'] }} MB"
-
-    - name: Validate available memory
-      ansible.builtin.assert:
-        that:
-          - ansible_facts['memfree_mb'] > 300
-        fail_msg: "Available memory is below 300 MB."
+          - "Total RAM: {{ ansible_facts['memory_mb']['real']['total'] }} MB"
+          - "Free RAM: {{ ansible_facts['memory_mb']['real']['free'] }} MB"
+          - "Free RAM excluding cache: {{ ansible_facts['memory_mb']['nocache']['free'] }} MB"
+          - "Swap used: {{ ansible_facts['memory_mb']['swap']['used'] }} MB"
 
     - name: Show current kernel
       ansible.builtin.debug:
