@@ -112,10 +112,46 @@
         msg: "Reboot iniated by ansible"
       when: reboot_required.stat.exists
     
-    - name: Check Docker service status
+    - name: Refresh service facts after patching
       ansible.builtin.service_facts:
 
-    - name: Show Docker service state
-      ansible.builtin.debug:
-        msg: "Docker state: {{ ansible_facts.services['docker.service'].state }}"
+    - name: Validate Docker after patching
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['docker.service'].state == "running"
+        success_msg: "Docker service is healthy after patching."
+        fail_msg: "Docker service is not running after patching."
+
+    - name: Check PostgreSQL after patching
+      become: true
+      ansible.builtin.command:
+        cmd: "docker exec {{ postgres_container }} pg_isready"
+      register: postgres_post_health
+      changed_when: false
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Validate PostgreSQL after patching
+      ansible.builtin.assert:
+        that:
+          - postgres_post_health.rc == 0
+        success_msg: "PostgreSQL is healthy after patching."
+        fail_msg: "PostgreSQL health check failed after patching."
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Check Flask API after patching
+      ansible.builtin.uri:
+        url: http://localhost:5000/health
+        method: GET
+        return_content: true
+      register: flask_post_health
+      failed_when: false
+      when: inventory_hostname in groups['flask_servers']
+
+    - name: Validate Flask API after patching
+      ansible.builtin.assert:
+        that:
+          - flask_post_health.status | default(0) == 200
+        success_msg: "Flask API is healthy after patching."
+        fail_msg: "Flask API health check failed after patching."
+      when: inventory_hostname in groups['flask_servers']
 
