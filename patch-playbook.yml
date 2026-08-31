@@ -47,11 +47,46 @@
       
     - name: Check Docker service status
       ansible.builtin.service_facts:
-
-    - name: Show Docker service state
-      ansible.builtin.debug:
-        msg: "Docker state: {{ ansible_facts.services['docker.service'].state }}"
   
+    - name: Validate docker services status before patching
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['docker.service'].state == "running"
+        success_msg: "Docker services is running. Proceeding with patching."
+        fail_msg: "Docker services is not running. Skipping the host patching activity and please check." 
+
+    - name: Check PostgreSQL
+      become: true
+      ansible.builtin.command: docker exec {{ postgres_container }} pg_isready
+      register: postgres_health
+      changed_when: false
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Validate PostgreSQL
+      ansible.builtin.assert:
+        that:
+          - postgres_health.rc == 0
+        success_msg: "PostgreSQL is accepting connections. Proceeding with patching."
+        fail_msg: "PostgreSQL is not accepting connections. Patching will not proceed."
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Check Flask API health
+      ansible.builtin.uri:
+        url: http://localhost:5000/health
+        method: GET
+        return_content: true
+      register: flask_health
+      failed_when: false
+      when: inventory_hostname in groups['flask_servers']
+
+    - name: Validate Flask API
+      ansible.builtin.assert:
+        that:
+          - flask_health.status | default(0) == 200
+        success_msg: "Flask API is healthy. Proceeding with patching."
+        fail_msg: "Flask API is not healthy. Patching will not proceed." 
+      when: inventory_hostname in groups['flask_servers']
+
     - name: Update package cache to their latest version
       become: true
       ansible.builtin.apt:
@@ -61,14 +96,6 @@
       become: true
       ansible.builtin.apt:
         upgrade: yes
-
-    - name: Ensure required packages are installed
-      become: true
-      ansible.builtin.apt:
-        name:
-        - curl
-        - git
-        state: present
 
     - name: Check if reboot is required
       ansible.builtin.stat:
