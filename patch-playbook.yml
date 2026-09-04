@@ -1,7 +1,10 @@
 ---
 - name: Routine patching activity
-  hosts: app_servers
+  hosts: linux_servers
+  serial:
+    - 1
   gather_facts: true
+
 
   tasks:
     - name: Show hostname
@@ -46,6 +49,7 @@
 
     - name: Check Docker service status
       ansible.builtin.service_facts:
+      when: inventory_hostname in groups['app_servers']
 
     - name: Validate docker services status before patching
       ansible.builtin.assert:
@@ -53,6 +57,7 @@
           - ansible_facts.services['docker.service'].state == "running"
         success_msg: "Docker services is running. Proceeding with patching."
         fail_msg: "Docker services is not running. Skipping the host patching activity and please check."
+      when: inventory_hostname in groups['app_servers']
 
     - name: Check PostgreSQL
       become: true
@@ -109,7 +114,9 @@
       become: true
       ansible.builtin.reboot:
         msg: "Reboot iniated by ansible"
-      when: reboot_required.stat.exists
+      when:
+        - inventory_hostname in groups['app_servers']
+        - reboot_required.stat.exists
 
     - name: Refresh service facts after patching
       ansible.builtin.service_facts:
@@ -120,6 +127,7 @@
           - ansible_facts.services['docker.service'].state == "running"
         success_msg: "Docker service is healthy after patching."
         fail_msg: "Docker service is not running after patching."
+      when: inventory_hostname in groups['app_servers']
 
     - name: Check PostgreSQL after patching
       become: true
