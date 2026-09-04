@@ -1,8 +1,7 @@
 ---
 - name: Routine patching activity
   hosts: linux_servers
-  serial:
-    - 1
+
   gather_facts: true
 
 
@@ -16,22 +15,20 @@
         msg: "Uptime: {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
 
     - name: Find root filesystem
-      ansible.builtin.debug:
-        msg: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
-      register: root_filesystem
+      ansible.builtin.set_fact:
+        root_filesystem: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
 
     - name: Show filesystem information
-      ansible.builtin.debug:
-        msg: >-
-          {{ (((root_filesystem.msg.size_total
-          - root_filesystem.msg.size_available)
-          / root_filesystem.msg.size_total) * 100) | round(2) }}
-      register: filesystem_space_util
+      ansible.builtin.set_fact:
+        filesystem_space_util: >-
+          {{ (((root_filesystem.size_total
+          - root_filesystem.size_available)
+          / root_filesystem.size_total) * 100) | round(2) }}
 
     - name: Validate disk space before patching
       ansible.builtin.assert:
         that:
-          - filesystem_space_util.msg | float < 90
+          - filesystem_space_util | float < 90
         success_msg: "Disk utilization is acceptable. Proceeding with patching."
         fail_msg: "Disk utilization is too high. Patching cannot proceed."
 
