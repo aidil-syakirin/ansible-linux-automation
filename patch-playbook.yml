@@ -39,7 +39,7 @@
         - name: Validate disk space before patching
           ansible.builtin.assert:
             that:
-              - filesystem_space_util | float < 90
+              - filesystem_space_util | float < free_disk_threshold
             success_msg: "Disk utilization is acceptable. Proceeding with patching."
             fail_msg: "Disk utilization is too high. Patching cannot proceed."
 
@@ -84,7 +84,7 @@
 
         - name: Check Flask API health
           ansible.builtin.uri:
-            url: http://localhost:5000/health
+            url: http://localhost:{{ flask_port }}/{{ flask_health_endpoint }}
             method: GET
             return_content: true
           register: flask_health
@@ -185,7 +185,7 @@
 
         - name: Check Flask API after patching
           ansible.builtin.uri:
-            url: http://localhost:5000/health
+            url: http://localhost:{{ flask_port }}/{{ flask_health_endpoint }}
             method: GET
             return_content: true
           register: flask_post_health

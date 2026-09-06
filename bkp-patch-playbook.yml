@@ -1,0 +1,163 @@
+---
+- name: Routine patching activity
+  hosts: linux_servers
+  serial:
+    - 1
+  gather_facts: true
+
+
+  tasks:
+    - name: Show hostname
+      ansible.builtin.debug:
+        msg: "hostname: {{ ansible_facts['hostname'] }}"
+
+    - name: Show system uptime
+      ansible.builtin.debug:
+        msg: "Uptime: {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
+
+    - name: Find root filesystem
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+      register: root_filesystem
+
+    - name: Show filesystem information
+      ansible.builtin.debug:
+        msg: >-
+          {{ (((root_filesystem.msg.size_total
+          - root_filesystem.msg.size_available)
+          / root_filesystem.msg.size_total) * 100) | round(2) }}
+      register: filesystem_space_util
+
+    - name: Validate disk space before patching
+      ansible.builtin.assert:
+        that:
+          - filesystem_space_util.msg | float < 90
+        success_msg: "Disk utilization is acceptable. Proceeding with patching."
+        fail_msg: "Disk utilization is too high. Patching cannot proceed."
+
+    - name: Show memory information
+      ansible.builtin.debug:
+        msg:
+          - "Total RAM: {{ ansible_facts['memory_mb']['real']['total'] }} MB"
+          - "Free RAM: {{ ansible_facts['memory_mb']['real']['free'] }} MB"
+          - "Free RAM excluding cache: {{ ansible_facts['memory_mb']['nocache']['free'] }} MB"
+          - "Swap used: {{ ansible_facts['memory_mb']['swap']['used'] }} MB"
+
+    - name: Show current kernel
+      ansible.builtin.debug:
+        msg: "Kernel: {{ ansible_facts['kernel'] }}"
+
+    - name: Check Docker service status
+      ansible.builtin.service_facts:
+      when: inventory_hostname in groups['app_servers']
+
+    - name: Validate docker services status before patching
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['docker.service'].state == "running"
+        success_msg: "Docker services is running. Proceeding with patching."
+        fail_msg: "Docker services is not running. Skipping the host patching activity and please check."
+      when: inventory_hostname in groups['app_servers']
+
+    - name: Check PostgreSQL
+      become: true
+      ansible.builtin.command: docker exec {{ postgres_container }} pg_isready
+      register: postgres_health
+      changed_when: false
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Validate PostgreSQL
+      ansible.builtin.assert:
+        that:
+          - postgres_health.rc == 0
+        success_msg: "PostgreSQL is accepting connections. Proceeding with patching."
+        fail_msg: "PostgreSQL is not accepting connections. Patching will not proceed."
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Check Flask API health
+      ansible.builtin.uri:
+        url: http://localhost:5000/health
+        method: GET
+        return_content: true
+      register: flask_health
+      failed_when: false
+      when: inventory_hostname in groups['flask_servers']
+
+    - name: Validate Flask API
+      ansible.builtin.assert:
+        that:
+          - flask_health.status | default(0) == 200
+        success_msg: "Flask API is healthy. Proceeding with patching."
+        fail_msg: "Flask API is not healthy. Patching will not proceed."
+      when: inventory_hostname in groups['flask_servers']
+
+    - name: Update package cache to their latest version
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Upgrade installed packages
+      become: true
+      ansible.builtin.apt:
+        upgrade: true
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Show reboot status
+      ansible.builtin.debug:
+        msg: "Reboot required: {{ reboot_required.stat.exists }}"
+
+    - name: Reboot if required
+      become: true
+      ansible.builtin.reboot:
+        msg: "Reboot iniated by ansible"
+      when:
+        - inventory_hostname in groups['app_servers']
+        - reboot_required.stat.exists
+
+    - name: Refresh service facts after patching
+      ansible.builtin.service_facts:
+
+    - name: Validate Docker after patching
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['docker.service'].state == "running"
+        success_msg: "Docker service is healthy after patching."
+        fail_msg: "Docker service is not running after patching."
+      when: inventory_hostname in groups['app_servers']
+
+    - name: Check PostgreSQL after patching
+      become: true
+      ansible.builtin.command:
+        cmd: "docker exec {{ postgres_container }} pg_isready"
+      register: postgres_post_health
+      changed_when: false
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Validate PostgreSQL after patching
+      ansible.builtin.assert:
+        that:
+          - postgres_post_health.rc == 0
+        success_msg: "PostgreSQL is healthy after patching."
+        fail_msg: "PostgreSQL health check failed after patching."
+      when: inventory_hostname in groups['postgres_servers']
+
+    - name: Check Flask API after patching
+      ansible.builtin.uri:
+        url: http://localhost:5000/health
+        method: GET
+        return_content: true
+      register: flask_post_health
+      failed_when: false
+      when: inventory_hostname in groups['flask_servers']
+
+    - name: Validate Flask API after patching
+      ansible.builtin.assert:
+        that:
+          - flask_post_health.status | default(0) == 200
+        success_msg: "Flask API is healthy after patching."
+        fail_msg: "Flask API health check failed after patching."
+      when: inventory_hostname in groups['flask_servers']
