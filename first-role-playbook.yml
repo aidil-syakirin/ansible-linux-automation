@@ -1,0 +1,78 @@
+---
+- name: Test roles and tasks
+  hosts: linux_servers
+  gather_facts: true
+
+  pre_tasks:
+
+      - name: Pre check for linux servers before routine patching activity
+        ansible.builtin.include_role:
+            name: linux_precheck
+
+      - name: Application pre check for linux servers before routine patching activity
+        block:
+
+            - name: Docker healthcheck before activity
+              ansible.builtin.include_role:
+                  name: docker_check
+              when: inventory_hostname in groups['docker_servers']
+
+            - name: PostgreSQL healthcheck before activity
+              ansible.builtin.include_role:
+                  name: postgres_check
+              when: inventory_hostname in groups['postgres_servers']
+
+            - name: Flask API healthcheck before activity
+              ansible.builtin.include_role:
+                  name: flask_check
+              when: inventory_hostname in groups['flask_servers']
+
+        rescue:
+
+            - name: Mark host as not eligible for patching
+              ansible.builtin.set_fact:
+                  patch_eligible: false
+
+            - name: Report failed pre-check
+              ansible.builtin.debug:
+                  msg: "Pre-patching validation failed on {{ inventory_hostname }}."
+
+  roles:
+
+      - linux_patching_role
+
+  tasks:
+
+      - name: Some task after the role
+        ansible.builtin.debug:
+            msg: "This runs after the role"
+
+  post_tasks:
+
+      - name: Application post check for linux servers after routine patching activity
+        when:
+            - patch_completion
+            - patch_eligible
+
+        block:
+
+            - name: Docker healthcheck after activity
+              ansible.builtin.include_role:
+                  name: docker_check
+              when: inventory_hostname in groups['docker_servers']
+
+            - name: PostgreSQL healthcheck after activity
+              ansible.builtin.include_role:
+                  name: postgres_check
+              when: inventory_hostname in groups['postgres_servers']
+
+            - name: Flask API healthcheck after activity
+              ansible.builtin.include_role:
+                  name: flask_check
+              when: inventory_hostname in groups['flask_servers']
+
+        rescue:
+
+            - name: Report failed post check
+              ansible.builtin.debug:
+                  msg: "Post patching validation failed on {{ inventory_hostname }}."

@@ -1,0 +1,59 @@
+---
+- name: Show hostname
+  ansible.builtin.debug:
+    msg: "hostname: {{ ansible_facts['hostname'] }}"
+
+- name: Show system uptime
+  ansible.builtin.debug:
+    msg: "Uptime: {{ (ansible_facts['uptime_seconds'] / 3600) | round(2) }} hours"
+
+- name: Find root filesystem
+  ansible.builtin.set_fact:
+    root_filesystem: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+
+- name: Initialize patch eligibility
+  ansible.builtin.set_fact:
+    patch_eligible: true
+
+- name: Initialize patch completion status
+  ansible.builtin.set_fact:
+    patch_completion: true
+
+- name: Pre-patching validation test
+  block:
+
+    - name: Show filesystem information
+      ansible.builtin.set_fact:
+        filesystem_space_util: >-
+          {{ (((root_filesystem.size_total
+          - root_filesystem.size_available)
+          / root_filesystem.size_total) * 100) | round(2) }}
+
+    - name: Validate disk space before patching
+      ansible.builtin.assert:
+        that:
+          - filesystem_space_util | float < free_disk_threshold
+        success_msg: "Disk utilization is acceptable. Proceeding with patching."
+        fail_msg: "Disk utilization is too high. Patching cannot proceed."
+
+    - name: Show memory information
+      ansible.builtin.debug:
+        msg:
+          - "Total RAM: {{ ansible_facts['memory_mb']['real']['total'] }} MB"
+          - "Free RAM: {{ ansible_facts['memory_mb']['real']['free'] }} MB"
+          - "Free RAM excluding cache: {{ ansible_facts['memory_mb']['nocache']['free'] }} MB"
+          - "Swap used: {{ ansible_facts['memory_mb']['swap']['used'] }} MB"
+
+    - name: Show current kernel
+      ansible.builtin.debug:
+        msg: "Kernel: {{ ansible_facts['kernel'] }}"
+
+  rescue:
+
+    - name: Mark host as not eligible for patching
+      ansible.builtin.set_fact:
+        patch_eligible: false
+
+    - name: Report failed pre-check
+      ansible.builtin.debug:
+        msg: "Pre-patching validation failed on {{ inventory_hostname }}."

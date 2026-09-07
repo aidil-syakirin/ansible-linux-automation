@@ -28,17 +28,4 @@
           ansible.builtin.debug:
             msg: "Always runs regardless of the result."
 
-    - name: Ensure required packages are installed
-      become: true
-      ansible.builtin.apt:
-        name:
-          - curl
-          - git
-        state: present
 
-    - name: Ensure required packages do not exists
-      become: true
-      ansible.builtin.apt:
-        name:
-          - cowsay
-        state: absent

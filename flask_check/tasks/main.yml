@@ -1,0 +1,17 @@
+---
+- name: Check Flask API health
+  ansible.builtin.uri:
+    url: http://localhost:{{ flask_port }}/{{ flask_health_endpoint }}
+    method: GET
+    return_content: true
+  register: flask_health
+  failed_when: false
+  when: inventory_hostname in groups['flask_servers']
+
+- name: Validate Flask API
+  ansible.builtin.assert:
+    that:
+      - flask_health.status | default(0) == 200
+    success_msg: "Flask API is healthy."
+    fail_msg: "Flask API is not healthy."
+  when: inventory_hostname in groups['flask_servers']

@@ -1,0 +1,15 @@
+---
+- name: Check PostgreSQL
+  become: true
+  ansible.builtin.command: docker exec {{ postgres_container }} pg_isready
+  register: postgres_health
+  changed_when: false
+  when: inventory_hostname in groups['postgres_servers']
+
+- name: Validate PostgreSQL
+  ansible.builtin.assert:
+    that:
+      - postgres_health.rc == 0
+    success_msg: "PostgreSQL is accepting connections."
+    fail_msg: "PostgreSQL is not accepting connections."
+  when: inventory_hostname in groups['postgres_servers']
