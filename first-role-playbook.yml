@@ -41,12 +41,6 @@
 
       - linux_patching_role
 
-  tasks:
-
-      - name: Some task after the role
-        ansible.builtin.debug:
-            msg: "This runs after the role"
-
   post_tasks:
 
       - name: Application post check for linux servers after routine patching activity
@@ -76,3 +70,18 @@
             - name: Report failed post check
               ansible.builtin.debug:
                   msg: "Post patching validation failed on {{ inventory_hostname }}."
+
+      - name: Test the postgres connection
+        become: true
+        ansible.builtin.command:
+            cmd: docker exec -i {{ postgres_container }} psql -U {{ postgres_ansible_user }} -d {{ postgres_database }} -c "SELECT CURRENT_TIMESTAMP"
+        when: inventory_hostname in groups['postgres_servers']
+        register: postgres_timestamp
+
+      - name: Validation for PostgreSQL authentication & connection
+        ansible.builtin.assert:
+            that:
+                - postgres_timestamp.rc == 0
+            success_msg: "PostgreSQL is accepting connection and can be authenticated"
+            fail_msg: "PostgreSQL is not accepting connection"
+        when: inventory_hostname in groups['postgres_servers']
