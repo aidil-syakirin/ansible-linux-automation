@@ -2,6 +2,8 @@
 - name: Test roles and tasks
   hosts: linux_servers
   gather_facts: true
+  srial: 1
+
 
   pre_tasks:
 
