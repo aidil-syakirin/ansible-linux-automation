@@ -4,3 +4,6 @@
 vault-password*
 .env
 inventory.local.ini
+
+# Ansible Vault
+**/vault.yml
